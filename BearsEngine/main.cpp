@@ -26,6 +26,13 @@ int main(int argc, char* argv[])
 		std::cout << "init fail on GLFW." << std::endl;
 		return -1;
 	}
+	else
+	{
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+		glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE); // for HiDPI monitors
+	}
 
 	GLFWwindow* m_mainWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Main Window", NULL, NULL);
 	if (!m_mainWindow)
@@ -48,6 +55,12 @@ int main(int argc, char* argv[])
 	ImGui_ImplGlfw_InitForOpenGL(m_mainWindow, true);
 	ImGui_ImplOpenGL3_Init();
 
+	// HiDPI awareness
+	float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.ScaleAllSizes(main_scale);
+	style.FontScaleDpi = main_scale;
+
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
@@ -65,7 +78,8 @@ int main(int argc, char* argv[])
 	lightingShader.Use();
 
 	// Spherical mesh grid
-	MeshGrid firstSphere = MeshGrid("vertices.txt", "triangles.txt");
+	//MeshGrid firstSphere = MeshGrid("vertices.txt", "triangles.txt", "Textures\\earth.jpg");
+	MeshGrid firstSphere = MeshGrid(50, 50, "Textures\\earth.jpg");
 
 	// Prospective projection handling
 	float zNear = 0.1f;
@@ -76,19 +90,66 @@ int main(int argc, char* argv[])
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CCW);
 
+	// Frametime
+	float deltaTime = 0.0f;
+	float lastFrame = 0.0f;
+
+	// Rotation
+	float theta_Y_in_degree = 0.0f;
+
 	while (!glfwWindowShouldClose(m_mainWindow))
 	{
+
+		float currentFrame = static_cast<float>(glfwGetTime());
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		ImGui::Begin("Control");
+		ImGui::Text("Camera Control");
+
+		if (ImGui::Button("Forward"))
+		{
+			camera.ProcessKeyboard(FORWARD, deltaTime);
+		}
+
+		if (ImGui::Button("Back"))
+		{
+			camera.ProcessKeyboard(BACKWARD, deltaTime);
+		}
+
+		if (ImGui::Button("Left"))
+		{
+			camera.ProcessKeyboard(LEFT, deltaTime);
+		}
+
+		if (ImGui::Button("Right"))
+		{
+			camera.ProcessKeyboard(RIGHT, deltaTime);
+		}
+
+		ImGui::Text("Sphere Control");
+		if (ImGui::Button("Rotate counterclockwise"))
+		{
+			theta_Y_in_degree += 5.0f;
+		}
+
+		if (ImGui::Button("Rotate clockwise"))
+		{
+			theta_Y_in_degree -= 5.0f;
+		}
+
+		ImGui::End();
+
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// Shader properties
 		lightingShader.Use();
-		lightingShader.SetVec3("objectColor", 1.0f, 0.5f, 0.3f);
-		lightingShader.SetVec3("lightColor", 1.0f, 1.0f, 0.0f);
+		lightingShader.SetVec3("lightColor", 1.0f, 1.0f, 1.0f);
 		lightingShader.SetVec3("lightPos", lightPos);
 		lightingShader.SetVec3("viewPos", camera.Position);
 
@@ -101,6 +162,7 @@ int main(int argc, char* argv[])
 
 		// world transformation
 		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::rotate(model, glm::radians(theta_Y_in_degree), glm::vec3(0.0f, 1.0f, 0.0f));
 		lightingShader.SetMat4("model", model);
 		glm::mat3 model_3 = glm::mat3(model); // get the upper left part
 		model_3 = glm::transpose(glm::inverse(model_3));
